@@ -1,0 +1,10 @@
+"""
+{% extends 'base.html' %}
+{% block content %}
+<h2>Hotels</h2>
+<ul>
+{% for hotel in hotels %}
+  <li><a href="{% url 'hotel_detail' hotel.id %}">{{ hotel.name }}</a> - {{ hotel.uploaded_at }}</li>
+{% endfor %}
+</ul>
+{% endblock %}

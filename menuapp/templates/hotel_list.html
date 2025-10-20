@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Uploaded Hotels</h2>
+<ul>
+  {% for hotel in hotels %}
+    <li><a href="{% url 'hotel_menu' hotel.id %}">{{ hotel.name }}</a> — {{ hotel.uploaded_at }}</li>
+  {% empty %}
+    <p>No hotels uploaded yet.</p>
+  {% endfor %}
+</ul>
+<a href="{% url 'upload' %}" class="btn btn-primary">Upload New File</a>
+{% endblock %}

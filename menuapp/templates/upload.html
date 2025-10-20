@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container my-5">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold text-primary">📤 Upload Hotel Menu (XLSX)</h3>
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">← Back to Dashboard</a>
+  </div>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body p-4">
+      <p class="text-muted mb-4">
+        Upload a valid <strong>.xlsx</strong> file to import your hotel’s menu items.
+        The file should include columns like:
+        <code>_sku</code>, <code>_nameEn</code>, <code>_shortDescEn</code>,
+        <code>_regularPrice</code>, <code>_finalPrice</code>,
+        <code>_categories</code>, <code>_imageUrl1</code>,
+        and <code>_hotelLogo</code>.
+      </p>
+
+      <form method="post" enctype="multipart/form-data" class="p-3 border rounded bg-light">
+        {% csrf_token %}
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Select XLSX File</label>
+          <div class="input-group">
+            <span class="input-group-text bg-primary text-white">
+              <i class="bi bi-file-earmark-excel-fill"></i>
+            </span>
+            <input type="file" name="file" class="form-control" accept=".xlsx" required>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+          <button type="submit" id="uploadBtn" class="btn btn-primary px-4 d-flex align-items-center gap-2">
+            <span id="uploadText">
+              <i class="bi bi-upload"></i> Upload & Process
+            </span>
+            <span id="uploadSpinner" class="spinner-border spinner-border-sm text-light d-none" role="status"></span>
+          </button>
+          <small class="text-muted">
+            Only <strong>.xlsx</strong> format files are supported.
+          </small>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if messages %}
+  <div class="mt-4">
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const form = document.querySelector("form");
+  const btn = document.getElementById("uploadBtn");
+  const spinner = document.getElementById("uploadSpinner");
+  const text = document.getElementById("uploadText");
+
+  form.addEventListener("submit", function() {
+    // Show spinner
+    spinner.classList.remove("d-none");
+    text.textContent = "Uploading...";
+    // Disable the button to prevent double clicks
+    btn.disabled = true;
+  });
+});
+</script>
+<style>
+  #uploadSpinner {
+  width: 1rem;
+  height: 1rem;
+}
+.container {
+  max-width: 700px;
+}
+.input-group-text i {
+  font-size: 1.1rem;
+}
+input[type="file"]::file-selector-button {
+  background-color: #0d6efd;
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.4rem 0.8rem;
+  margin-right: 1rem;
+  cursor: pointer;
+}
+input[type="file"]::file-selector-button:hover {
+  background-color: #0b5ed7;
+}
+</style>
+{% endblock %}

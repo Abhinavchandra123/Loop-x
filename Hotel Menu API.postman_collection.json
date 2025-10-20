@@ -1,0 +1,140 @@
+{
+  "info": {
+    "name": "Hotel Menu API",
+    "_postman_id": "d1234567-abcd-4ef0-9123-abcdef123456",
+    "description": "API for Hotel Menu Backend with Token Authentication",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login (Get Token)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api-token-auth/",
+              "host": ["{{base_url}}"],
+              "path": ["api-token-auth", ""]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "username", "value": "", "type": "text" },
+                { "key": "password", "value": "", "type": "text" }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.environment.set('token', jsonData.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin APIs (Token Required)",
+      "item": [
+        {
+          "name": "Upload Menu (XLSX)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/upload-menu/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "upload-menu", ""]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Public APIs",
+      "item": [
+        {
+          "name": "Get All Hotels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/hotels/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "hotels", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Hotel Menu (by ID)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/hotel/1/menu/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "hotel", "1", "menu", ""]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Random Menu Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/menu/random/?count=5",
+              "host": ["{{base_url}}"],
+              "path": ["api", "menu", "random", ""],
+              "query": [
+                { "key": "count", "value": "5" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Menu Items",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/menu/all/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "menu", "all", ""]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": []
+}

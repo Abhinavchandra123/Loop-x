@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+<div class="container my-4">
+
+  <!-- Hotel Header -->
+  <div class="text-center mb-5">
+    {% if hotel.logo %}
+      <img src="{{ hotel.logo.url }}" alt="{{ hotel.name }}" class="rounded-circle shadow-sm" width="100" height="100">
+    {% endif %}
+    <h2 class="mt-3 fw-bold">{{ hotel.name }}</h2>
+    <p class="text-muted">Manage and view menu items below</p>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="btn-group" role="group">
+      <button id="btnList" class="btn btn-primary btn-sm active">List View</button>
+      <button id="btnGrid" class="btn btn-outline-primary btn-sm">Grid View</button>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{% url 'add_menu_item' hotel.id %}" class="btn btn-success btn-sm">+ Add New Menu Item</a>
+      <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">← Back to Dashboard</a>
+    </div>
+  </div>
+ 
+ 
+
+  {% if grouped_menu %}
+    <!-- List View (default) -->
+    <div id="listView">
+      {% csrf_token %}
+      <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
+        <h4 class="text-primary mb-0">Menu List</h4>
+        <input type="text" id="menuSearch" class="form-control" placeholder="Search by name or category..." style="max-width: 300px;">
+      </div>
+
+      {% for category, items in grouped_menu.items %}
+        <h4 class="text-primary mt-4 mb-2 border-bottom pb-1">{{ category }}</h4>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle table-hover bg-white shadow-sm rounded">
+            <thead class="table-light">
+              <tr>
+                <th>#</th>
+                <th>Item</th>
+                <th>Description</th>
+                <th>Price (KD)</th>
+                <th>Visible</th>
+                <th>Categories</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+              <tr id="row-{{ item.id }}">
+                <td>{{ forloop.counter }}</td>
+                <td>
+                  <div class="d-flex align-items-center gap-2">
+                    {% if item.image_local %}
+                      <img src="{{ MEDIA_URL }}{{ item.image_local }}" class="menu-thumb" alt="{{ item.item_name }}">
+                    {% elif item.image_url %}
+                      <img src="{{ item.image_url }}" class="menu-thumb" alt="{{ item.item_name }}">
+                    {% else %}
+                      <img src="https://via.placeholder.com/40x40?text=No+Img" class="menu-thumb" alt="No image">
+                    {% endif %}
+                    <span class="fw-semibold">{{ item.item_name }}</span>
+                  </div>
+                </td>
+                <td class="text-muted small">{{ item.description|default:"–"|truncatewords:10 }}</td>
+                <td>{% if item.price %}{{ item.price|floatformat:3 }} KD{% else %}-{% endif %}</td>
+                <td>
+                  <div class="form-check form-switch">
+                    <input class="form-check-input visibility-toggle" type="checkbox"
+                          data-item-id="{{ item.id }}"
+                          {% if item.is_visible %}checked{% endif %}>
+                  </div>
+                </td>
+                <td>
+                  {% for cat in item.categories.all %}
+                    <span class="badge bg-light text-dark border">{{ cat.name }}</span>
+                  {% endfor %}
+                  {% for mcat in item.manual_categories.all %}
+                    <span class="badge bg-info text-dark border">{{ mcat.name }}</span>
+                  {% endfor %}
+                </td>
+                <td>
+                  <a href="{% url 'edit_menu_item' hotel.id item.id %}" class="btn btn-outline-warning btn-sm">Edit</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Grid View -->
+    <div id="gridView" class="d-none">
+      {% for category, items in grouped_menu.items %}
+      <div class="mb-5">
+        <h3 class="border-bottom pb-2 mb-3 text-primary fw-bold">{{ category }}</h3>
+        <div class="row g-4">
+          {% for item in items %}
+          <div class="col-md-4 col-lg-3">
+            <div class="card h-100 shadow-sm">
+              {% if item.image_local %}
+                <img src="{{ MEDIA_URL }}{{ item.image_local }}" class="card-img-top" alt="{{ item.item_name }}">
+              {% elif item.image_url %}
+                <img src="{{ item.image_url }}" class="card-img-top" alt="{{ item.item_name }}">
+              {% else %}
+                <img src="https://via.placeholder.com/300x200?text=No+Image" class="card-img-top" alt="No image">
+              {% endif %}
+              <div class="card-body d-flex flex-column">
+                <h5 class="card-title fw-semibold">{{ item.item_name }}</h5>
+                {% if item.price %}
+                  <p class="text-success mb-1 fw-bold">{{ item.price|floatformat:3 }} KD</p>
+                {% endif %}
+                {% if item.description %}
+                  <p class="text-muted small mb-2" style="min-height:48px;">
+                    {{ item.description|truncatewords:20 }}
+                  </p>
+                {% endif %}
+                {% if item.categories.all or item.manual_categories.all %}
+                  <div class="mb-2">
+                    {% for cat in item.categories.all %}
+                      <span class="badge bg-light text-dark border me-1">{{ cat.name }}</span>
+                    {% endfor %}
+                    {% for mcat in item.manual_categories.all %}
+                      <span class="badge bg-info text-dark border me-1">{{ mcat.name }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                <div class="mt-auto">
+                  <a href="{% url 'edit_menu_item' hotel.id item.id %}" class="btn btn-sm btn-outline-warning w-100">Edit</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center"><p class="text-muted fs-5">No menu items found for this hotel.</p></div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const btnList = document.getElementById("btnList");
+  const btnGrid = document.getElementById("btnGrid");
+  const listView = document.getElementById("listView");
+  const gridView = document.getElementById("gridView");
+
+  btnList.addEventListener("click", () => {
+    listView.classList.remove("d-none");
+    gridView.classList.add("d-none");
+    btnList.classList.add("active");
+    btnGrid.classList.remove("active");
+  });
+
+  btnGrid.addEventListener("click", () => {
+    gridView.classList.remove("d-none");
+    listView.classList.add("d-none");
+    btnGrid.classList.add("active");
+    btnList.classList.remove("active");
+  });
+
+  // Visibility toggle
+  document.querySelectorAll(".visibility-toggle").forEach(toggle => {
+    toggle.addEventListener("change", async function() {
+      const itemId = this.dataset.itemId;
+      const isVisible = this.checked;
+      try {
+        const response = await fetch(`/api/menu/${itemId}/toggle_visibility/`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ visible: isVisible })
+        });
+        if (!response.ok) {
+          alert("Failed to update visibility");
+          this.checked = !isVisible;
+        }
+      } catch (error) {
+        alert("Network error");
+        this.checked = !isVisible;
+      }
+    });
+  });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  // ✅ Menu search feature
+  const searchInput = document.getElementById("menuSearch");
+  const rows = document.querySelectorAll("#listView table tbody tr");
+
+  searchInput.addEventListener("input", function() {
+    const keyword = this.value.trim().toLowerCase();
+
+    rows.forEach(row => {
+      // Menu name
+      const nameCell = row.querySelector("td:nth-child(2)")?.innerText.toLowerCase() || "";
+      // Categories (auto + manual badges)
+      const categoryCell = row.querySelector("td:nth-child(6)")?.innerText.toLowerCase() || "";
+      // Combine both into searchable text
+      const combined = nameCell + " " + categoryCell;
+
+      if (combined.includes(keyword)) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    });
+
+    // Hide empty category headers if no items visible
+    document.querySelectorAll("#listView h4.text-primary").forEach(header => {
+      const nextTable = header.nextElementSibling;
+      const visibleRows = nextTable.querySelectorAll("tbody tr:not([style*='display: none'])");
+      header.style.display = visibleRows.length ? "" : "none";
+      nextTable.style.display = visibleRows.length ? "" : "none";
+    });
+  });
+});
+</script>
+
+<style>
+.table thead th {
+  font-weight: 600;
+  background-color: #f8f9fa;
+}
+.table td {
+  vertical-align: middle;
+}
+.menu-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 0 3px rgba(0,0,0,0.2);
+}
+.badge.bg-info {
+  background-color: #0dcaf0 !important;
+}
+.btn-group .btn.active {
+  background-color: #0d6efd !important;
+  color: white !important;
+}
+.card-img-top {
+  height: 180px;
+  object-fit: cover;
+}
+.form-switch .form-check-input {
+  cursor: pointer;
+}
+#menuSearch {
+  transition: box-shadow 0.2s ease;
+}
+#menuSearch:focus {
+  box-shadow: 0 0 5px rgba(13, 110, 253, 0.3);
+  border-color: #0d6efd;
+}
+</style>
+{% endblock %}
