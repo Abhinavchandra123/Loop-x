@@ -17,6 +17,7 @@ from .forms import HotelForm
 from .forms import MenuItemForm
 from .models import Category, Hotel, ManualCategory, MenuItem
 from .serializers import HotelSerializer, HotelDetailSerializer, MenuItemSerializer
+from django.db.models import Q
 from .utils import download_image
 import pandas as pd
 from openpyxl import load_workbook
@@ -30,11 +31,14 @@ from rest_framework.pagination import LimitOffsetPagination
 from django.db.models import Count
 from random import sample
 import random
+from datetime import datetime, time
+import pytz
 from rest_framework.pagination import PageNumberPagination
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from rest_framework.generics import ListAPIView
-
+# sudo systemctl restart gunicorn
+# sudo systemctl reload nginx
 def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
@@ -159,12 +163,16 @@ def upload_xlsx_view(request):
         # Clear existing menu items for hotel
         MenuItem.objects.filter(hotel=hotel).delete()
 
-        # ✅ Iterate rows
-        for row in sheet.iter_rows(min_row=2, values_only=True):
+        imported = 0
+        skipped = []
+
+        for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
             try:
                 name = row[idx_name] if idx_name is not None else None
                 if not name:
+                    skipped.append(f"Row {i}: No name")
                     continue
+
                 name = str(name).strip()
 
                 # Price
@@ -173,7 +181,7 @@ def upload_xlsx_view(request):
                     try:
                         price = float(row[idx_price])
                     except:
-                        price = None
+                        skipped.append(f"Row {i}: Invalid price")
 
                 # Category
                 categories = []
@@ -182,37 +190,54 @@ def upload_xlsx_view(request):
                     if cat_cell:
                         cat_names = [c.strip() for c in cat_cell.split(",") if c.strip()]
                         for cat_name in cat_names:
-                            cat_obj, _ = Category.objects.get_or_create(name__iexact=cat_name, defaults={'name': cat_name})
+                            cat_obj, _ = Category.objects.get_or_create(name=cat_name)
                             categories.append(cat_obj)
 
-                # Description
                 description = None
-                if idx_description is not None and row[idx_description] is not None:
+                if idx_description is not None and row[idx_description]:
                     description = str(row[idx_description]).strip()
 
-                # Image
                 image_url = None
-                if idx_image is not None and row[idx_image] is not None:
+                if idx_image is not None and row[idx_image]:
                     image_url = str(row[idx_image]).strip()
 
                 image_local = None
                 if image_url:
                     image_local = download_image(image_url, slugify(hotel_name))
 
-                item = MenuItem.objects.create(
-                    hotel=hotel,
-                    item_name=name,
-                    price=price,
-                    description=description,
-                    image_url=image_url,
-                    image_local=image_local,
-                )
-                if categories:
-                    item.categories.set(categories)  # ✅ link many-to-many
+                existing_item = MenuItem.objects.filter(hotel=hotel, item_name__iexact=name).first()
 
+                if existing_item:
+                    # Merge categories
+                    for cat in categories:
+                        existing_item.categories.add(cat)
+                    # Optionally update missing fields
+                    if not existing_item.description and description:
+                        existing_item.description = description
+                    if not existing_item.image_url and image_url:
+                        existing_item.image_url = image_url
+                    if not existing_item.image_local and image_local:
+                        existing_item.image_local = image_local
+                    if not existing_item.price and price:
+                        existing_item.price = price
+                    existing_item.save()
+                else:
+                    # Create new item
+                    item = MenuItem.objects.create(
+                        hotel=hotel,
+                        item_name=name,
+                        price=price,
+                        description=description,
+                        image_url=image_url,
+                        image_local=image_local,
+                    )
+                    if categories:
+                        item.categories.set(categories)
+                imported += 1
             except Exception as e:
-                print(f"[Row Error] {e}")
-
+                skipped.append(f"Row {i}: {e}")
+        print(f"✅ Imported {imported} items")
+        print(f"⚠️ Skipped rows: {skipped}")
         wb.close()
         os.remove(tmp_path)
 
@@ -526,53 +551,97 @@ class FifteenItemPagination(PageNumberPagination):
         })
 
 class UnifiedMenuAPI(ListAPIView):
+    """
+    Return menus filtered by time-based manual categories + uncategorized items.
+    - Menus WITH manual category: only shown if current time fits that category.
+    - Menus WITHOUT manual category: always shown.
+    """
     permission_classes = [AllowAny]
     pagination_class = FifteenItemPagination
 
+    # --- Helper: get current Kuwait time-based active categories ---
+    def get_active_categories(self):
+        tz = pytz.timezone("Asia/Kuwait")
+        now = datetime.now(tz).time()
+        active = []
+
+        for cat in ManualCategory.objects.all():
+            parts = cat.name.split('-')
+            if len(parts) >= 3:
+                try:
+                    start = datetime.strptime(parts[-2].strip(), "%H:%M").time()
+                    end = datetime.strptime(parts[-1].strip(), "%H:%M").time()
+                except:
+                    continue
+
+                if start <= end:
+                    if start <= now <= end:
+                        active.append(cat.name)
+                else:
+                    # Cross-midnight (e.g., 22:00–02:00)
+                    if now >= start or now <= end:
+                        active.append(cat.name)
+
+        print(f"[Kuwait Time {now.strftime('%H:%M')}] Active categories: {active}")
+        return active
+
+    # --- Core Query ---
     def get_queryset(self):
         items = (
             MenuItem.objects.filter(is_visible=True)
             .select_related("hotel")
             .prefetch_related("manual_categories")
         )
+
+        active_cats = self.get_active_categories()
+
+        # Use Q() to combine both conditions in one query instead of union
+        if active_cats:
+            items = items.filter(
+                Q(manual_categories__name__in=active_cats) | Q(manual_categories__isnull=True)
+            ).distinct()
+        else:
+            # If somehow no active categories are found, show all visible items
+            items = items.distinct()
+
         return items
 
+    # --- Response builder ---
     def list(self, request, *args, **kwargs):
         items = self.get_queryset()
 
-        # ✅ Group items by item_name
+        # Group by item_name
         grouped = defaultdict(list)
         for item in items:
-            grouped[item.item_name.strip()].append(item)
+            grouped[item.item_name.strip().lower()].append(item)
 
-        # ✅ Build unique item entries with hotel list
+        # Build unified list
         unique_items = []
         for item_name, menu_list in grouped.items():
-            # pick first item to represent general menu details
             first_item = menu_list[0]
-
-            hotel_data = []
-            for m in menu_list:
-                hotel_data.append({
+            hotel_data = [
+                {
                     "hotel_name": m.hotel.name,
-                    "hotel_logo": request.build_absolute_uri(m.hotel.logo.url) if m.hotel.logo else None
-                })
+                    "hotel_logo": request.build_absolute_uri(m.hotel.logo.url) if m.hotel.logo else None,
+                }
+                for m in menu_list
+            ]
 
             unique_items.append({
                 "item_name": first_item.item_name,
-                "price": f"{float(first_item.price):.3f} KD" if first_item.price is not None else None,
+                "price": f"{float(first_item.price):.3f} KD" if first_item.price else None,
                 "description": first_item.description,
-                "image": request.build_absolute_uri(first_item.image_url) if first_item.image_url else (
-                    request.build_absolute_uri(f"/media/{first_item.image_local}") if first_item.image_local else None
+                "image": request.build_absolute_uri(f"/media/{first_item.image_local}") if first_item.image_local else (
+                    request.build_absolute_uri(first_item.image_url) if first_item.image_url else None
                 ),
                 "manual_categories": [cat.name for cat in first_item.manual_categories.all()],
-                "hotels": hotel_data
+                "hotels": hotel_data,
             })
 
-        # ✅ Shuffle the unique items
+        # Shuffle results
         random.shuffle(unique_items)
 
-        # ✅ Paginate
+        # Paginate
         page = self.paginate_queryset(unique_items)
         if page is not None:
             return self.get_paginated_response(page)
@@ -656,6 +725,7 @@ class UpdateMenuCategoryAPI(APIView):
     def post(self, request, pk):
         type_ = request.data.get("type")
         category_id = request.data.get("category_id")
+        category_ids = request.data.get("category_ids")  # new field for multiple
 
         try:
             item = MenuItem.objects.get(pk=pk)
@@ -666,7 +736,12 @@ class UpdateMenuCategoryAPI(APIView):
                 else:
                     item.categories.clear()
             elif type_ == "manual":
-                if category_id:
+                if category_ids:
+                    # multiple manual categories
+                    categories = ManualCategory.objects.filter(pk__in=category_ids)
+                    item.manual_categories.set(categories)
+                elif category_id:
+                    # fallback single category (for backward compatibility)
                     category = ManualCategory.objects.get(pk=category_id)
                     item.manual_categories.set([category])
                 else:
@@ -713,3 +788,32 @@ class BulkDeleteMenuItemsAPI(APIView):
                 continue
 
         return Response({"deleted": deleted})
+
+class DeleteHotelAPI(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        """Delete a hotel and all associated menu items + images"""
+        try:
+            hotel = Hotel.objects.get(pk=pk)
+
+            # Delete all menu images related to this hotel
+            for item in hotel.menu_items.all():
+                if item.image_local:
+                    file_path = os.path.join(settings.MEDIA_ROOT, str(item.image_local))
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                item.delete()
+
+            # Delete hotel logo if exists
+            if hotel.logo:
+                logo_path = os.path.join(settings.MEDIA_ROOT, str(hotel.logo))
+                if os.path.exists(logo_path):
+                    os.remove(logo_path)
+
+            hotel.delete()
+            return Response({"success": True, "message": f"Hotel '{hotel.name}' and all menus deleted."})
+        except Hotel.DoesNotExist:
+            return Response({"error": "Hotel not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

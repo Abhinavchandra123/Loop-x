@@ -15,10 +15,20 @@ class MenuItemSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         request = self.context.get('request')
+
+        # ✅ Case 1: If local image exists
         if obj.image_local:
-            url = settings.MEDIA_URL + obj.image_local
+            # Convert ImageFieldFile to string before concatenation
+            image_path = str(obj.image_local)
+            url = f"{settings.MEDIA_URL}{image_path}"
             return request.build_absolute_uri(url) if request else url
-        return obj.image_url
+
+        # ✅ Case 2: Remote image URL fallback
+        if obj.image_url:
+            return obj.image_url
+
+        # ✅ Case 3: Default placeholder (optional)
+        return request.build_absolute_uri(f"{settings.MEDIA_URL}no_image.jpg") if request else f"{settings.MEDIA_URL}no_image.jpg"
 
     def get_categories(self, obj):
         return [cat.name for cat in obj.categories.all()]

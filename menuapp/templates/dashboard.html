@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<form style="display:none;">{% csrf_token %}</form>
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h2>Dashboard</h2>
   <div>
@@ -34,6 +35,9 @@
       <td>
         <a href="{% url 'hotel_menu' hotel.id %}" class="btn btn-sm btn-outline-primary">View</a>
         <a href="{% url 'edit_hotel' hotel.id %}" class="btn btn-sm btn-outline-warning">Edit</a>
+        <button class="btn btn-sm btn-outline-danger delete-hotel-btn" data-id="{{ hotel.id }}">
+          Delete
+        </button>
       </td>
     </tr>
     {% empty %}
@@ -41,4 +45,38 @@
     {% endfor %}
   </tbody>
 </table>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const deleteButtons = document.querySelectorAll(".delete-hotel-btn");
+
+  deleteButtons.forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const hotelId = btn.dataset.id;
+      if (!confirm("Are you sure you want to delete this hotel and all its menus?")) return;
+
+      try {
+        const response = await fetch(`/api/hotel/${hotelId}/delete/`, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+            "Content-Type": "application/json"
+          }
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          alert(data.message || "Hotel deleted successfully!");
+          // Remove hotel row from table without reloading
+          btn.closest("tr").remove();
+        } else {
+          alert(data.error || "Failed to delete hotel.");
+        }
+      } catch (err) {
+        alert("Network error while deleting hotel.");
+      }
+    });
+  });
+});
+</script>
 {% endblock %}

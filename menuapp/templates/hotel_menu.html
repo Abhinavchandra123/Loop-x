@@ -97,10 +97,11 @@
 
                 <!-- ✅ Manual Category editable -->
                 <td>
-                  <select class="form-select form-select-sm category-select" data-type="manual" data-item-id="{{ item.id }}">
-                    <option value="">— None —</option>
-                    {% for mcat in all_manual_categories %}
-                      <option value="{{ mcat.id }}" {% if mcat in item.manual_categories.all %}selected{% endif %}>{{ mcat.name }}</option>
+                  <select class="form-select form-select-sm manual-category-select" data-item-id="{{ item.id }}" multiple>
+                    {% for cat in all_manual_categories %}
+                      <option value="{{ cat.id }}" {% if cat in item.manual_categories.all %}selected{% endif %}>
+                        {{ cat.name }}
+                      </option>
                     {% endfor %}
                   </select>
                 </td>
@@ -161,7 +162,57 @@
     <div class="text-center"><p class="text-muted fs-5">No menu items found for this hotel.</p></div>
   {% endif %}
 </div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".manual-category-select").forEach(el => {
+    new Choices(el, {
+      removeItemButton: true,
+      searchEnabled: true,
+      placeholderValue: "Select manual categories..."
+    });
+  });
+});
+</script>
 
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const selects = document.querySelectorAll(".manual-category-select");
+
+  selects.forEach(select => {
+    // Save categories when user changes selection
+    select.addEventListener("change", async function() {
+      const itemId = this.dataset.itemId;
+      const selectedIds = Array.from(this.selectedOptions).map(opt => opt.value);
+
+      try {
+        const response = await fetch(`/api/menu/${itemId}/update_category/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value
+          },
+          body: JSON.stringify({
+            type: "manual",
+            category_ids: selectedIds
+          })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          console.log(`✅ Updated manual categories for item ${itemId}`);
+        } else {
+          alert(data.error || "Failed to update categories.");
+        }
+      } catch (error) {
+        alert("Network error while updating categories.");
+      }
+    });
+  });
+});
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function() {
 

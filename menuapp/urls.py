@@ -57,5 +57,6 @@ urlpatterns = [
     
     path("api/menu/<int:pk>/delete/", views.DeleteMenuItemAPI.as_view(), name="delete_menu_item"),
     path("api/menu/bulk_delete/", views.BulkDeleteMenuItemsAPI.as_view(), name="bulk_delete_menu_items"),
+    path("api/hotel/<int:pk>/delete/", views.DeleteHotelAPI.as_view(), name="delete_hotel"),
     # path("api/menu/all/", views.MenuAllAPI.as_view(), name="api_all_menu"),
 ]
